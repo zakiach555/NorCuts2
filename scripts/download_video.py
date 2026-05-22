@@ -177,44 +177,76 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         "Sign in to confirm you're not a bot",
         "confirm you're not a bot",
         "bot detection",
+        "Requested format is not available",
     )
 
     def _is_bot_error(err_str):
         return any(p.lower() in err_str.lower() for p in _BOT_DETECTION_PHRASES)
 
-    # Attempt 1: with configured player clients
+    def _try_pytubefix_fallback(video_url, dest_path):
+        """Fallback downloader using pytubefix when yt-dlp is blocked."""
+        try:
+            from pytubefix import YouTube
+            from pytubefix.cli import on_progress
+            print(i18n("[FALLBACK] Trying pytubefix..."))
+            yt = YouTube(video_url, on_progress_callback=on_progress, use_oauth=False, allow_oauth_cache=True)
+            stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+            if not stream:
+                stream = yt.streams.filter(file_extension='mp4').order_by('resolution').desc().first()
+            if not stream:
+                print(i18n("[FALLBACK] pytubefix: no MP4 stream found."))
+                return False
+            tmp_dir = os.path.dirname(dest_path)
+            tmp_name = "input_pytube_tmp.mp4"
+            stream.download(output_path=tmp_dir, filename=tmp_name)
+            tmp_path = os.path.join(tmp_dir, tmp_name)
+            if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 1024:
+                os.rename(tmp_path, dest_path)
+                print(i18n("[FALLBACK] pytubefix download succeeded: {}").format(dest_path))
+                return True
+            return False
+        except Exception as pte:
+            print(i18n("[FALLBACK] pytubefix failed: {}").format(pte))
+            return False
+
+    # Attempt 1: yt-dlp with configured player clients
+    _ytdlp_error = None
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except yt_dlp.utils.DownloadError as e:
         error_str = str(e)
+        _ytdlp_error = e
+
         if "No address associated with hostname" in error_str or "Failed to resolve" in error_str:
             print(i18n("\n[CRITICAL ERROR] Connection Failure: Could not access YouTube."))
             print(i18n("Check your internet connection or if there is any DNS block."))
-            print(i18n("Details: {}").format(e))
             sys.exit(1)
 
-        elif _is_bot_error(error_str) and not cookies_file:
-            print(i18n("\n[BOT DETECTION] YouTube is blocking this download."))
-            print(i18n("FIX: Export cookies from your browser and upload cookies.txt to the project root."))
-            print(i18n("  In Colab: use the '🍪 YouTube Cookies' cell to upload your cookies.txt"))
-            print(i18n("  Guide: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"))
-            raise
+        elif _is_bot_error(error_str):
+            print(i18n("\n[BOT DETECTION] yt-dlp was blocked by YouTube."))
+            print(i18n("Attempting pytubefix fallback..."))
+            if not _try_pytubefix_fallback(url, final_video_path):
+                print(i18n("\n[FAILED] Both yt-dlp and pytubefix are blocked."))
+                print(i18n("FIX: Export cookies from your browser and upload cookies.txt."))
+                print(i18n("  In Colab: run the '🍪 YouTube Cookies' cell to upload cookies.txt"))
+                print(i18n("  Guide: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"))
+                raise
+            # pytubefix succeeded — continue to subtitle/rename steps below
 
         elif download_subs and ("Unable to download video subtitles" in error_str or "429" in error_str):
             print(i18n("\nWarning: Error downloading subtitles ({}).").format(e))
             print(i18n("Retrying ONLY the video (without subtitles)..."))
-
             ydl_opts['writesubtitles'] = False
             ydl_opts['writeautomaticsub'] = False
             ydl_opts['postprocessors'] = [p for p in ydl_opts.get('postprocessors', []) if 'Subtitle' not in p.get('key', '')]
-
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
             except Exception as e2:
                 print(i18n("Fatal error on second attempt: {}").format(e2))
                 raise
+
         elif "is not a valid URL" in error_str:
             print(i18n("Error: the entered link is not valid."))
             raise
