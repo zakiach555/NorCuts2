@@ -139,15 +139,20 @@ G4F_MODELS = [
 ]
 
 OPENROUTER_MODELS = [
+    # Free models (no credits needed — use these first)
+    'google/gemini-2.0-flash-exp:free',
+    'meta-llama/llama-3.1-8b-instruct:free',
+    'mistralai/mistral-7b-instruct:free',
+    'qwen/qwen-2.5-7b-instruct:free',
+    'deepseek/deepseek-r1-distill-qwen-32b:free',
+    # Paid models (require credits)
     'google/gemini-2.5-flash',
     'google/gemini-2.5-pro',
     'openai/gpt-4o',
     'openai/gpt-4o-mini',
     'anthropic/claude-3.5-sonnet',
-    'anthropic/claude-3-haiku',
     'deepseek/deepseek-chat',
     'meta-llama/llama-3.3-70b-instruct',
-    'mistralai/mistral-7b-instruct',
 ]
 
 OPENAI_MODELS = [

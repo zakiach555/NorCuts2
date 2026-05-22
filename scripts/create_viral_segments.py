@@ -315,6 +315,11 @@ def _call_openai_compatible(prompt, api_key, model, base_url, provider_name,
                 json=payload,
                 timeout=timeout,
             )
+            # 402 = no credits for this model — surface immediately so the
+            # caller can fall back to a free model instead of wasting retries
+            if resp.status_code == 402:
+                print(f"[WARN] {provider_name}: 402 Payment Required for model '{model}' (no credits)")
+                return None  # sentinel: caller handles fallback
             resp.raise_for_status()
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
@@ -330,12 +335,36 @@ def _call_openai_compatible(prompt, api_key, model, base_url, provider_name,
     return "{}"
 
 
-def call_openrouter(prompt, api_key, model="google/gemini-2.5-flash"):
-    return _call_openai_compatible(
+# Free OpenRouter models — tried in order when the paid model returns 402
+_OPENROUTER_FREE_FALLBACKS = [
+    "google/gemini-2.0-flash-exp:free",
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+    "qwen/qwen-2.5-7b-instruct:free",
+]
+
+
+def call_openrouter(prompt, api_key, model="google/gemini-2.0-flash-exp:free"):
+    result = _call_openai_compatible(
         prompt, api_key, model,
         base_url="https://openrouter.ai/api/v1",
         provider_name="OpenRouter",
     )
+    # If the chosen model needs credits, auto-retry with free models
+    if result is None:
+        free_models = [m for m in _OPENROUTER_FREE_FALLBACKS if m != model]
+        for free_model in free_models:
+            print(f"[INFO] OpenRouter: retrying with free model '{free_model}'...")
+            result = _call_openai_compatible(
+                prompt, api_key, free_model,
+                base_url="https://openrouter.ai/api/v1",
+                provider_name="OpenRouter",
+            )
+            if result is not None:
+                return result
+        print("[ERROR] OpenRouter: all free fallback models exhausted.")
+        return "{}"
+    return result
 
 
 def call_openai(prompt, api_key, model="gpt-4o-mini"):
@@ -616,7 +645,7 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
     config = {
         "selected_api": "openrouter",
         "gemini":      {"api_key": "", "model": "gemini-2.5-flash",                        "chunk_size": 70000},
-        "openrouter":  {"api_key": "", "model": "google/gemini-2.5-flash",                 "chunk_size": 70000},
+        "openrouter":  {"api_key": "", "model": "google/gemini-2.0-flash-exp:free",         "chunk_size": 70000},
         "openai":      {"api_key": "", "model": "gpt-4o-mini",                             "chunk_size": 70000},
         "deepseek":    {"api_key": "", "model": "deepseek-chat",                           "chunk_size": 60000},
         "zhipu":       {"api_key": "", "model": "glm-4-flash",                             "chunk_size": 50000},
