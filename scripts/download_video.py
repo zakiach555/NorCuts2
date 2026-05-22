@@ -149,16 +149,14 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         'quiet': False,
         'no_warnings': False,
         'force_ipv4': True,
-        # Try android client first — bypasses bot detection on most videos without cookies
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        # Use multiple player clients — tv_embedded/mweb bypass bot detection on most videos
+        'extractor_args': {'youtube': {'player_client': ['tv_embedded', 'mweb', 'android', 'web']}},
     }
 
     # Attach cookies file if present (needed when YouTube requires sign-in)
     if cookies_file:
         ydl_opts['cookiefile'] = cookies_file
-    
 
-    
     if download_subs:
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegSubtitlesConvertor',
@@ -169,8 +167,17 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         print(i18n("Downloading video to: {}...").format(project_folder))
     except UnicodeEncodeError:
         print(i18n("Downloading video to: {}...").format(project_folder.encode('ascii', 'replace').decode('ascii')))
-    
-    # Tentativa 1: Com configuração original
+
+    _BOT_DETECTION_PHRASES = (
+        "Sign in to confirm you're not a bot",
+        "confirm you're not a bot",
+        "bot detection",
+    )
+
+    def _is_bot_error(err_str):
+        return any(p.lower() in err_str.lower() for p in _BOT_DETECTION_PHRASES)
+
+    # Attempt 1: with configured player clients
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
@@ -181,15 +188,22 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
             print(i18n("Check your internet connection or if there is any DNS block."))
             print(i18n("Details: {}").format(e))
             sys.exit(1)
-        
+
+        elif _is_bot_error(error_str) and not cookies_file:
+            print(i18n("\n[BOT DETECTION] YouTube is blocking this download."))
+            print(i18n("FIX: Export cookies from your browser and upload cookies.txt to the project root."))
+            print(i18n("  In Colab: use the '🍪 YouTube Cookies' cell to upload your cookies.txt"))
+            print(i18n("  Guide: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"))
+            raise
+
         elif download_subs and ("Unable to download video subtitles" in error_str or "429" in error_str):
             print(i18n("\nWarning: Error downloading subtitles ({}).").format(e))
             print(i18n("Retrying ONLY the video (without subtitles)..."))
-            
+
             ydl_opts['writesubtitles'] = False
             ydl_opts['writeautomaticsub'] = False
             ydl_opts['postprocessors'] = [p for p in ydl_opts.get('postprocessors', []) if 'Subtitle' not in p.get('key', '')]
-            
+
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
@@ -197,8 +211,8 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
                 print(i18n("Fatal error on second attempt: {}").format(e2))
                 raise
         elif "is not a valid URL" in error_str:
-             print(i18n("Error: the entered link is not valid."))
-             raise 
+            print(i18n("Error: the entered link is not valid."))
+            raise
         else:
             print(i18n("Download error: {}").format(e))
             raise
