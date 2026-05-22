@@ -119,7 +119,7 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         'merge_output_format': 'mp4',
         'progress_hooks': [progress_hook],
         # Force ios client — newer yt-dlp defaults to android_vr which YouTube blocks
-        'extractor_args': {'youtube': {'player_client': ['ios', 'web']}},
+        'extractor_args': {'youtube': {'player_client': ['tv_embedded', 'ios']}},
         # Opções de Legenda
         'writesubtitles': download_subs,
         'writeautomaticsub': download_subs,
