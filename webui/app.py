@@ -108,6 +108,13 @@ GEMINI_MODELS = [
     'gemini-2.0-flash-lite'
 ]
 
+OPENROUTER_FREE_MODELS = [
+    'deepseek/deepseek-v4-flash:free',
+    'google/gemma-4-31b-it:free',
+    'google/gemma-4-26b-a4b-it:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
+]
+
 G4F_MODELS = [
     'gpt-4o',
     'gpt-4o-mini',
@@ -411,27 +418,28 @@ with gr.Blocks(title="NorCuts2", theme=gr.themes.Base(), css=css, analytics_enab
                         max_dur_input = gr.Number(label=i18n("Max Duration (s)"), value=90)
                 with gr.Column(scale=1):
                     with gr.Row():
-                        ai_backend_input = gr.Dropdown(choices=[(i18n("Gemini"), "gemini"), (i18n("G4F"), "g4f"), (i18n("Local (GGUF)"), "local"), (i18n("Manual"), "manual")], label=i18n("AI Backend"), value="g4f", scale=2)
-                        api_key_input = gr.Textbox(label=i18n("Gemini API Key"), type="password", scale=3)
+                        ai_backend_input = gr.Dropdown(choices=[(i18n("OpenRouter (Free)"), "openrouter"), (i18n("Gemini"), "gemini"), (i18n("G4F"), "g4f"), (i18n("Local (GGUF)"), "local"), (i18n("Manual"), "manual")], label=i18n("AI Backend"), value="openrouter", scale=2)
+                        api_key_input = gr.Textbox(label=i18n("API Key"), type="password", scale=3)
                     
                     # New Dynamic Inputs
                     with gr.Row():
-                        ai_model_input = gr.Dropdown(choices=GEMINI_MODELS, label=i18n("AI Model"), value=GEMINI_MODELS[1], allow_custom_value=True, visible=True, scale=5)
+                        ai_model_input = gr.Dropdown(choices=OPENROUTER_FREE_MODELS, label=i18n("AI Model"), value=OPENROUTER_FREE_MODELS[0], allow_custom_value=True, visible=True, scale=5)
                         refresh_models_btn = gr.Button("🔄", size="sm", visible=False, scale=0, min_width=50) # Only local
                         chunk_size_input = gr.Number(label=i18n("Chunk Size"), value=70000, precision=0, scale=2)
                     
                     # Update listeners with logic to hide/show API key
                     def update_ai_ui(backend):
-                        print(f"DEBUG: Backend changed to: {backend}")  # Debug output
-                        show_api = (backend == "gemini")
+                        show_api = backend in ("gemini", "openrouter")
                         show_refresh = (backend == "local")
-                        
-                        # Definições padrão para evitar que fiquem vazios
                         new_choices = []
                         new_val = ""
                         new_chunk = 70000
-                        
-                        if backend == "gemini":
+
+                        if backend == "openrouter":
+                            new_choices = OPENROUTER_FREE_MODELS
+                            new_val = OPENROUTER_FREE_MODELS[0]
+                            new_chunk = 70000
+                        elif backend == "gemini":
                             new_choices = GEMINI_MODELS
                             new_val = GEMINI_MODELS[1] if len(GEMINI_MODELS) > 1 else GEMINI_MODELS[0]
                             new_chunk = 70000
@@ -441,24 +449,19 @@ with gr.Blocks(title="NorCuts2", theme=gr.themes.Base(), css=css, analytics_enab
                             new_chunk = 70000
                         elif backend == "local":
                             models = get_local_models()
-                            if models:
-                                new_choices = models
-                                new_val = models[0]
-                            else:
-                                new_choices = [i18n("No models found")]
-                                new_val = i18n("No models found")
+                            new_choices = models if models else [i18n("No models found")]
+                            new_val = new_choices[0]
                             new_chunk = 30000
-                        else: # Manual
+                        else:  # Manual
                             new_choices = []
                             new_val = ""
                             new_chunk = 70000
 
-                        print(f"DEBUG: Returning updates - choices: {len(new_choices)}, value: {new_val}, chunk: {new_chunk}")  # Debug output
                         return (
-                            gr.update(visible=show_api), # API Key Visibility
-                            gr.update(choices=new_choices, value=new_val, visible=(backend != "manual")), # Model Dropdown
-                            gr.update(visible=show_refresh), # Refresh Button
-                            gr.update(value=new_chunk) # Chunk Size
+                            gr.update(visible=show_api),
+                            gr.update(choices=new_choices, value=new_val, visible=(backend != "manual")),
+                            gr.update(visible=show_refresh),
+                            gr.update(value=new_chunk)
                         )
 
                     def refresh_local_models():

@@ -33,6 +33,46 @@ try:
 except ImportError:
     HAS_LLAMA_CPP = False
 
+try:
+    import requests as _requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
+
+
+def call_openrouter(prompt, api_key, model="deepseek/deepseek-v4-flash:free"):
+    if not HAS_REQUESTS:
+        print("Error: 'requests' not installed.")
+        return "{}"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    for attempt in range(3):
+        try:
+            print(f"Sending chunk to OpenRouter (Model: {model})...")
+            resp = _requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers, json=payload, timeout=120
+            )
+            if resp.status_code == 429:
+                wait = 30 * (attempt + 1)
+                print(f"[429] Rate limit. Waiting {wait}s...")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            print(f"[WARN] OpenRouter attempt {attempt+1}/3: {e}")
+            if attempt < 2:
+                time.sleep(10)
+    print("[ERROR] OpenRouter: all retries exhausted.")
+    return "{}"
+
 def clean_json_response(response_text):
     """
     Limpa a resposta focando em encontrar o objeto JSON que contém a chave "segments".
@@ -520,6 +560,11 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
         "g4f": {
             "model": "gpt-4o-mini",
             "chunk_size": 2000
+        },
+        "openrouter": {
+            "api_key": "",
+            "model": "deepseek/deepseek-v4-flash:free",
+            "chunk_size": 70000
         }
     }
 
@@ -529,6 +574,7 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
                 loaded_config = json.load(f)
                 if "gemini" in loaded_config: config["gemini"].update(loaded_config["gemini"])
                 if "g4f" in loaded_config: config["g4f"].update(loaded_config["g4f"])
+                if "openrouter" in loaded_config: config["openrouter"].update(loaded_config["openrouter"])
                 if "selected_api" in loaded_config: config["selected_api"] = loaded_config["selected_api"]
         except Exception as e:
             print(f"Erro ao ler api_config.json: {e}")
@@ -549,6 +595,13 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
         current_chunk_size = chunk_size_arg if chunk_size_arg and int(chunk_size_arg) > 0 else cfg_chunk
         cfg_model = config["g4f"].get("model", "gpt-4o-mini")
         model_name = model_name_arg if model_name_arg else cfg_model
+
+    elif ai_mode == "openrouter":
+        cfg_chunk = config["openrouter"].get("chunk_size", 70000)
+        current_chunk_size = chunk_size_arg if chunk_size_arg and int(chunk_size_arg) > 0 else cfg_chunk
+        cfg_model = config["openrouter"].get("model", "deepseek/deepseek-v4-flash:free")
+        model_name = model_name_arg if model_name_arg else cfg_model
+        if not api_key: api_key = config["openrouter"].get("api_key", "")
 
     elif ai_mode == "local":
         current_chunk_size = chunk_size_arg if chunk_size_arg and int(chunk_size_arg) > 0 else 3000
@@ -742,6 +795,8 @@ OUTPUT JSON ONLY:
         elif ai_mode == "g4f":
             print(f"Enviando chunk {i+1} para o G4F (Model: {model_name})...")
             response_text = call_g4f(prompt, model_name=model_name)
+        elif ai_mode == "openrouter":
+            response_text = call_openrouter(prompt, api_key, model=model_name)
         elif ai_mode == "local" and local_llm_instance:
             print(f"Processing chunk {i+1} with Local LLM...")
             try:
