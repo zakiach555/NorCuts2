@@ -14,7 +14,7 @@ if sys.stdout and hasattr(sys.stdout, 'buffer'):
     except:
         pass
 
-# Tenta importar bibliotecas de IA opcionalmente
+# Optional AI library imports
 try:
     import google.generativeai as genai
     HAS_GEMINI = True
@@ -32,6 +32,12 @@ try:
     HAS_LLAMA_CPP = True
 except ImportError:
     HAS_LLAMA_CPP = False
+
+try:
+    import requests as _requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
 
 def clean_json_response(response_text):
     """
@@ -276,6 +282,131 @@ def call_g4f(prompt, model_name="gpt-4o-mini"):
     print("[ERROR] G4F failed on all models. Returning empty result.")
     return "{}"
 
+
+# ── Generic OpenAI-compatible caller ────────────────────────────────────────
+# Used by: OpenRouter, OpenAI, DeepSeek, Zhipu/GLM, Qwen
+
+def _call_openai_compatible(prompt, api_key, model, base_url, provider_name,
+                             max_retries=3, timeout=120):
+    """Send a chat completion request to any OpenAI-compatible endpoint."""
+    if not api_key:
+        raise ValueError(f"{provider_name}: API key is missing.")
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    # OpenRouter requires these extra headers for routing attribution
+    if "openrouter" in base_url:
+        headers["HTTP-Referer"] = "https://github.com/zakiach555/NorCuts2"
+        headers["X-Title"] = "NorCuts2"
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+    }
+
+    for attempt in range(max_retries):
+        try:
+            resp = _requests.post(
+                f"{base_url.rstrip('/')}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=timeout,
+            )
+            # 402 = no credits for this model — surface immediately so the
+            # caller can fall back to a free model instead of wasting retries
+            if resp.status_code == 402:
+                print(f"[WARN] {provider_name}: 402 Payment Required for model '{model}' (no credits)")
+                return None  # sentinel: caller handles fallback
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+            if content and len(content) > 5:
+                return content
+            print(f"[WARN] {provider_name}: empty response (attempt {attempt+1})")
+        except Exception as e:
+            print(f"[WARN] {provider_name} attempt {attempt+1}/{max_retries}: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(5 * (attempt + 1))
+
+    print(f"[ERROR] {provider_name}: all retries exhausted.")
+    return "{}"
+
+
+# Free OpenRouter models — tried in order when the paid model returns 402
+_OPENROUTER_FREE_FALLBACKS = [
+    "google/gemini-2.0-flash-exp:free",
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+    "qwen/qwen-2.5-7b-instruct:free",
+]
+
+
+def call_openrouter(prompt, api_key, model="google/gemini-2.0-flash-exp:free"):
+    result = _call_openai_compatible(
+        prompt, api_key, model,
+        base_url="https://openrouter.ai/api/v1",
+        provider_name="OpenRouter",
+    )
+    # If the chosen model needs credits, auto-retry with free models
+    if result is None:
+        free_models = [m for m in _OPENROUTER_FREE_FALLBACKS if m != model]
+        for free_model in free_models:
+            print(f"[INFO] OpenRouter: retrying with free model '{free_model}'...")
+            result = _call_openai_compatible(
+                prompt, api_key, free_model,
+                base_url="https://openrouter.ai/api/v1",
+                provider_name="OpenRouter",
+            )
+            if result is not None:
+                return result
+        print("[ERROR] OpenRouter: all free fallback models exhausted.")
+        return "{}"
+    return result
+
+
+def call_openai(prompt, api_key, model="gpt-4o-mini"):
+    return _call_openai_compatible(
+        prompt, api_key, model,
+        base_url="https://api.openai.com/v1",
+        provider_name="OpenAI",
+    )
+
+
+def call_deepseek(prompt, api_key, model="deepseek-chat"):
+    return _call_openai_compatible(
+        prompt, api_key, model,
+        base_url="https://api.deepseek.com",
+        provider_name="DeepSeek",
+    )
+
+
+def call_zhipu(prompt, api_key, model="glm-4-flash"):
+    return _call_openai_compatible(
+        prompt, api_key, model,
+        base_url="https://open.bigmodel.cn/api/paas/v4",
+        provider_name="Zhipu/GLM",
+    )
+
+
+def call_qwen(prompt, api_key, model="qwen-plus"):
+    return _call_openai_compatible(
+        prompt, api_key, model,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        provider_name="Qwen",
+    )
+
+
+def call_huggingface(prompt, api_key, model="meta-llama/Llama-3.1-70B-Instruct"):
+    """HuggingFace Inference API — uses /v1/chat/completions (OpenAI-compatible)."""
+    return _call_openai_compatible(
+        prompt, api_key, model,
+        base_url="https://api-inference.huggingface.co/v1",
+        provider_name="HuggingFace",
+    )
+
 def load_transcript(project_folder):
     """Parses input.tsv or input.srt from the project folder."""
     input_tsv = os.path.join(project_folder, 'input.tsv')
@@ -510,48 +641,44 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
     config_path = os.path.join(base_dir, 'api_config.json')
     prompt_path = os.path.join(base_dir, 'prompt.txt')
 
+    # Default config — overridden by api_config.json
     config = {
-        "selected_api": "gemini",
-        "gemini": {
-            "api_key": "",
-            "model": "gemini-2.5-flash-lite-preview-09-2025",
-            "chunk_size": 15000
-        },
-        "g4f": {
-            "model": "gpt-4o-mini",
-            "chunk_size": 2000
-        }
+        "selected_api": "openrouter",
+        "gemini":      {"api_key": "", "model": "gemini-2.5-flash",                        "chunk_size": 70000},
+        "openrouter":  {"api_key": "", "model": "google/gemini-2.0-flash-exp:free",         "chunk_size": 70000},
+        "openai":      {"api_key": "", "model": "gpt-4o-mini",                             "chunk_size": 70000},
+        "deepseek":    {"api_key": "", "model": "deepseek-chat",                           "chunk_size": 60000},
+        "zhipu":       {"api_key": "", "model": "glm-4-flash",                             "chunk_size": 50000},
+        "qwen":        {"api_key": "", "model": "qwen-plus",                               "chunk_size": 60000},
+        "huggingface": {"api_key": "", "model": "meta-llama/Llama-3.1-70B-Instruct",      "chunk_size": 20000},
+        "g4f":         {"model": "gpt-4o-mini",                                            "chunk_size": 2000},
     }
 
     if os.path.exists(config_path):
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
-                loaded_config = json.load(f)
-                if "gemini" in loaded_config: config["gemini"].update(loaded_config["gemini"])
-                if "g4f" in loaded_config: config["g4f"].update(loaded_config["g4f"])
-                if "selected_api" in loaded_config: config["selected_api"] = loaded_config["selected_api"]
+                loaded = json.load(f)
+            for key in config:
+                if key in loaded and isinstance(loaded[key], dict):
+                    config[key].update(loaded[key])
+            if "selected_api" in loaded:
+                config["selected_api"] = loaded["selected_api"]
         except Exception as e:
-            print(f"Erro ao ler api_config.json: {e}")
+            print(f"[WARN] Could not read api_config.json: {e}")
 
-    # Config Vars
+    # Resolve model + chunk_size + api_key from config for the chosen backend
     current_chunk_size = 15000
     model_name = ""
-    
-    if ai_mode == "gemini":
-        cfg_chunk = config["gemini"].get("chunk_size", 15000)
-        current_chunk_size = chunk_size_arg if chunk_size_arg and int(chunk_size_arg) > 0 else cfg_chunk
-        cfg_model = config["gemini"].get("model", "gemini-2.5-flash-lite-preview-09-2025")
-        model_name = model_name_arg if model_name_arg else cfg_model
-        if not api_key: api_key = config["gemini"].get("api_key", "")
-            
-    elif ai_mode == "g4f":
-        cfg_chunk = config["g4f"].get("chunk_size", 2000)
-        current_chunk_size = chunk_size_arg if chunk_size_arg and int(chunk_size_arg) > 0 else cfg_chunk
-        cfg_model = config["g4f"].get("model", "gpt-4o-mini")
-        model_name = model_name_arg if model_name_arg else cfg_model
 
-    elif ai_mode == "local":
-        current_chunk_size = chunk_size_arg if chunk_size_arg and int(chunk_size_arg) > 0 else 3000
+    _bc = config.get(ai_mode, {})
+    _default_chunk = _bc.get("chunk_size", 15000)
+    current_chunk_size = int(chunk_size_arg) if chunk_size_arg and int(chunk_size_arg) > 0 else _default_chunk
+    model_name = model_name_arg if model_name_arg else _bc.get("model", "")
+    if not api_key:
+        api_key = _bc.get("api_key", "")
+
+    if ai_mode == "local":
+        current_chunk_size = int(chunk_size_arg) if chunk_size_arg and int(chunk_size_arg) > 0 else 3000
         model_name = model_name_arg if model_name_arg else ""
 
     system_prompt_template = ""
@@ -739,6 +866,24 @@ OUTPUT JSON ONLY:
         elif ai_mode == "gemini":
             print(f"Enviando chunk {i+1} para o Gemini (Model: {model_name})...")
             response_text = call_gemini(prompt, api_key, model_name=model_name)
+        elif ai_mode == "openrouter":
+            print(f"Sending chunk {i+1} to OpenRouter (Model: {model_name})...")
+            response_text = call_openrouter(prompt, api_key, model=model_name)
+        elif ai_mode == "openai":
+            print(f"Sending chunk {i+1} to OpenAI (Model: {model_name})...")
+            response_text = call_openai(prompt, api_key, model=model_name)
+        elif ai_mode == "deepseek":
+            print(f"Sending chunk {i+1} to DeepSeek (Model: {model_name})...")
+            response_text = call_deepseek(prompt, api_key, model=model_name)
+        elif ai_mode == "zhipu":
+            print(f"Sending chunk {i+1} to Zhipu/GLM (Model: {model_name})...")
+            response_text = call_zhipu(prompt, api_key, model=model_name)
+        elif ai_mode == "qwen":
+            print(f"Sending chunk {i+1} to Qwen (Model: {model_name})...")
+            response_text = call_qwen(prompt, api_key, model=model_name)
+        elif ai_mode == "huggingface":
+            print(f"Sending chunk {i+1} to HuggingFace (Model: {model_name})...")
+            response_text = call_huggingface(prompt, api_key, model=model_name)
         elif ai_mode == "g4f":
             print(f"Enviando chunk {i+1} para o G4F (Model: {model_name})...")
             response_text = call_g4f(prompt, model_name=model_name)

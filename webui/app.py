@@ -54,6 +54,30 @@ if not os.path.exists(MODELS_DIR):
 # Global variables
 current_process = None
 
+def _load_api_config():
+    """Read api_config.json and return (selected_api, api_key) for the UI."""
+    cfg_path = os.path.join(WORKING_DIR, "api_config.json")
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        selected = cfg.get("selected_api", "openrouter")
+        key = cfg.get(selected, {}).get("api_key", "")
+        return selected, key
+    except Exception:
+        return "openrouter", ""
+
+def _get_key_for_backend(backend):
+    """Return the API key for a specific backend from api_config.json."""
+    cfg_path = os.path.join(WORKING_DIR, "api_config.json")
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        return cfg.get(backend, {}).get("api_key", "")
+    except Exception:
+        return ""
+
+_INIT_BACKEND, _INIT_API_KEY = _load_api_config()
+
 # Helpers
 def convert_color_to_ass(hex_color, alpha="00"):
     if not hex_color:
@@ -122,6 +146,56 @@ G4F_MODELS = [
     'claude-3.7-sonnet',
     'gemini-2.0-flash',
     'qwen-2.5-72b'
+]
+
+OPENROUTER_MODELS = [
+    # Free models (no credits needed — use these first)
+    'google/gemini-2.0-flash-exp:free',
+    'meta-llama/llama-3.1-8b-instruct:free',
+    'mistralai/mistral-7b-instruct:free',
+    'qwen/qwen-2.5-7b-instruct:free',
+    'deepseek/deepseek-r1-distill-qwen-32b:free',
+    # Paid models (require credits)
+    'google/gemini-2.5-flash',
+    'google/gemini-2.5-pro',
+    'openai/gpt-4o',
+    'openai/gpt-4o-mini',
+    'anthropic/claude-3.5-sonnet',
+    'deepseek/deepseek-chat',
+    'meta-llama/llama-3.3-70b-instruct',
+]
+
+OPENAI_MODELS = [
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
+    'gpt-3.5-turbo',
+]
+
+DEEPSEEK_MODELS = [
+    'deepseek-chat',
+    'deepseek-reasoner',
+]
+
+ZHIPU_MODELS = [
+    'glm-4-flash',
+    'glm-4-air',
+    'glm-4',
+    'glm-4-plus',
+]
+
+QWEN_MODELS = [
+    'qwen-plus',
+    'qwen-max',
+    'qwen-turbo',
+    'qwen-long',
+]
+
+HUGGINGFACE_MODELS = [
+    'meta-llama/Llama-3.1-70B-Instruct',
+    'meta-llama/Llama-3.3-70B-Instruct',
+    'mistralai/Mistral-7B-Instruct-v0.3',
+    'Qwen/Qwen2.5-72B-Instruct',
 ]
 
 def get_local_models():
@@ -411,54 +485,69 @@ with gr.Blocks(title="NorCuts2", theme=gr.themes.Base(), css=css, analytics_enab
                         max_dur_input = gr.Number(label=i18n("Max Duration (s)"), value=90)
                 with gr.Column(scale=1):
                     with gr.Row():
-                        ai_backend_input = gr.Dropdown(choices=[(i18n("Gemini"), "gemini"), (i18n("G4F"), "g4f"), (i18n("Local (GGUF)"), "local"), (i18n("Manual"), "manual")], label=i18n("AI Backend"), value="g4f", scale=2)
-                        api_key_input = gr.Textbox(label=i18n("Gemini API Key"), type="password", scale=3)
+                        ai_backend_input = gr.Dropdown(choices=[
+                            (i18n("OpenRouter (Recommended)"), "openrouter"),
+                            (i18n("OpenAI"), "openai"),
+                            (i18n("DeepSeek"), "deepseek"),
+                            (i18n("Zhipu / GLM"), "zhipu"),
+                            (i18n("Qwen"), "qwen"),
+                            (i18n("HuggingFace"), "huggingface"),
+                            (i18n("Gemini"), "gemini"),
+                            (i18n("G4F (Free)"), "g4f"),
+                            (i18n("Local (GGUF)"), "local"),
+                            (i18n("Manual"), "manual"),
+                        ], label=i18n("AI Backend"), value=_INIT_BACKEND, scale=2)
+                        api_key_input = gr.Textbox(label=i18n("API Key"), type="password", value=_INIT_API_KEY, scale=3)
                     
                     # New Dynamic Inputs
                     with gr.Row():
-                        ai_model_input = gr.Dropdown(choices=GEMINI_MODELS, label=i18n("AI Model"), value=GEMINI_MODELS[1], allow_custom_value=True, visible=True, scale=5)
+                        _init_model_map = {
+                            "openrouter": (OPENROUTER_MODELS, OPENROUTER_MODELS[0]),
+                            "openai":     (OPENAI_MODELS,     OPENAI_MODELS[0]),
+                            "deepseek":   (DEEPSEEK_MODELS,   DEEPSEEK_MODELS[0]),
+                            "zhipu":      (ZHIPU_MODELS,      ZHIPU_MODELS[0]),
+                            "qwen":       (QWEN_MODELS,       QWEN_MODELS[0]),
+                            "huggingface":(HUGGINGFACE_MODELS, HUGGINGFACE_MODELS[0]),
+                            "gemini":     (GEMINI_MODELS,     GEMINI_MODELS[1] if len(GEMINI_MODELS) > 1 else GEMINI_MODELS[0]),
+                            "g4f":        (G4F_MODELS,        G4F_MODELS[1]),
+                        }
+                        _init_choices, _init_val = _init_model_map.get(_INIT_BACKEND, (OPENROUTER_MODELS, OPENROUTER_MODELS[0]))
+                        ai_model_input = gr.Dropdown(choices=_init_choices, label=i18n("AI Model"), value=_init_val, allow_custom_value=True, visible=(_INIT_BACKEND != "manual"), scale=5)
                         refresh_models_btn = gr.Button("🔄", size="sm", visible=False, scale=0, min_width=50) # Only local
                         chunk_size_input = gr.Number(label=i18n("Chunk Size"), value=70000, precision=0, scale=2)
                     
                     # Update listeners with logic to hide/show API key
                     def update_ai_ui(backend):
-                        print(f"DEBUG: Backend changed to: {backend}")  # Debug output
-                        show_api = (backend == "gemini")
+                        needs_key = backend not in ("g4f", "local", "manual")
                         show_refresh = (backend == "local")
-                        
-                        # Definições padrão para evitar que fiquem vazios
-                        new_choices = []
-                        new_val = ""
-                        new_chunk = 70000
-                        
-                        if backend == "gemini":
-                            new_choices = GEMINI_MODELS
-                            new_val = GEMINI_MODELS[1] if len(GEMINI_MODELS) > 1 else GEMINI_MODELS[0]
-                            new_chunk = 70000
-                        elif backend == "g4f":
-                            new_choices = G4F_MODELS
-                            new_val = G4F_MODELS[5] if len(G4F_MODELS) > 5 else G4F_MODELS[0]
-                            new_chunk = 70000
-                        elif backend == "local":
-                            models = get_local_models()
-                            if models:
-                                new_choices = models
-                                new_val = models[0]
-                            else:
-                                new_choices = [i18n("No models found")]
-                                new_val = i18n("No models found")
-                            new_chunk = 30000
-                        else: # Manual
-                            new_choices = []
-                            new_val = ""
-                            new_chunk = 70000
 
-                        print(f"DEBUG: Returning updates - choices: {len(new_choices)}, value: {new_val}, chunk: {new_chunk}")  # Debug output
+                        _backend_map = {
+                            "openrouter":  (OPENROUTER_MODELS,  OPENROUTER_MODELS[0],  70000),
+                            "openai":      (OPENAI_MODELS,      OPENAI_MODELS[1],       70000),
+                            "deepseek":    (DEEPSEEK_MODELS,    DEEPSEEK_MODELS[0],     60000),
+                            "zhipu":       (ZHIPU_MODELS,       ZHIPU_MODELS[0],        50000),
+                            "qwen":        (QWEN_MODELS,        QWEN_MODELS[0],         60000),
+                            "huggingface": (HUGGINGFACE_MODELS, HUGGINGFACE_MODELS[0],  20000),
+                            "gemini":      (GEMINI_MODELS,      GEMINI_MODELS[1] if len(GEMINI_MODELS) > 1 else GEMINI_MODELS[0], 70000),
+                            "g4f":         (G4F_MODELS,         G4F_MODELS[1],          70000),
+                        }
+
+                        if backend == "local":
+                            models = get_local_models()
+                            new_choices = models if models else [i18n("No models found")]
+                            new_val = new_choices[0]
+                            new_chunk = 30000
+                        elif backend in _backend_map:
+                            new_choices, new_val, new_chunk = _backend_map[backend]
+                        else:  # manual
+                            new_choices, new_val, new_chunk = [], "", 70000
+
+                        new_key = _get_key_for_backend(backend)
                         return (
-                            gr.update(visible=show_api), # API Key Visibility
-                            gr.update(choices=new_choices, value=new_val, visible=(backend != "manual")), # Model Dropdown
-                            gr.update(visible=show_refresh), # Refresh Button
-                            gr.update(value=new_chunk) # Chunk Size
+                            gr.update(visible=needs_key, value=new_key),
+                            gr.update(choices=new_choices, value=new_val, visible=(backend != "manual")),
+                            gr.update(visible=show_refresh),
+                            gr.update(value=new_chunk),
                         )
 
                     def refresh_local_models():

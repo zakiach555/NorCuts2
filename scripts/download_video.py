@@ -37,14 +37,30 @@ def progress_hook(d):
     elif d['status'] == 'finished':
         print(f"[download] Download concluído: {d['filename']}", flush=True)
 
+def _find_cookies_file():
+    """Return path to cookies.txt if it exists in the project root, else None."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    candidate = os.path.join(project_root, "cookies.txt")
+    return candidate if os.path.exists(candidate) else None
+
+
 def download(url, base_root="VIRALS", download_subs=True, quality="best"):
     # 1. Extrair informações do vídeo para pegar o título
     # 1. Extrair informações do vídeo para pegar o título
     print(i18n("Extracting video information..."))
     title = None
-    
+    _info_cookies = _find_cookies_file()
+    _info_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+    }
+    if _info_cookies:
+        _info_opts['cookiefile'] = _info_cookies
+
     try:
-        with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
+        with yt_dlp.YoutubeDL(_info_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             title = info.get('title')
     except Exception as e:
@@ -109,19 +125,23 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
     selected_format = quality_map.get(quality, 'bestvideo+bestaudio/best')
     print(i18n("Configuring download quality: {} -> {}").format(quality, selected_format))
 
+    cookies_file = _find_cookies_file()
+    if cookies_file:
+        print(i18n("Using cookies file: {}").format(cookies_file))
+
     ydl_opts = {
         'format': selected_format,
         'overwrites': True,
-        'outtmpl': output_path_base, 
+        'outtmpl': output_path_base,
         'postprocessor_args': [
             '-movflags', 'faststart'
         ],
         'merge_output_format': 'mp4',
         'progress_hooks': [progress_hook],
-        # Opções de Legenda
+        # Subtitle options
         'writesubtitles': download_subs,
         'writeautomaticsub': download_subs,
-        'subtitleslangs': ['pt.*', 'en.*', 'sp.*'], # Prioritize generic PT, EN, SP
+        'subtitleslangs': ['pt.*', 'en.*', 'sp.*', 'ar.*'],
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
@@ -129,7 +149,13 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         'quiet': False,
         'no_warnings': False,
         'force_ipv4': True,
+        # Try android client first — bypasses bot detection on most videos without cookies
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
     }
+
+    # Attach cookies file if present (needed when YouTube requires sign-in)
+    if cookies_file:
+        ydl_opts['cookiefile'] = cookies_file
     
 
     
@@ -179,6 +205,29 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
     except Exception as e:
         print(i18n("Unexpected error: {}").format(e))
         raise
+
+    # ── Normalize video filename to input.mp4 ──────────────────────────────
+    # yt-dlp with an outtmpl that has no extension (e.g. "…/input") skips
+    # adding the extension for pre-muxed single-format downloads.  The file
+    # ends up as just "input" (no ".mp4"), but the rest of the pipeline
+    # expects "input.mp4".  Find whatever file was created and rename it.
+    if not os.path.exists(final_video_path):
+        import glob as _glob
+        _skip_exts = {'.srt', '.vtt', '.part', '.ytdl', '.json', '.temp.mp4'}
+        _candidates = (
+            _glob.glob(output_path_base + '.*') +
+            ([output_path_base] if os.path.exists(output_path_base) else [])
+        )
+        _video_candidates = [
+            f for f in _candidates
+            if not any(f.endswith(x) for x in _skip_exts)
+        ]
+        if _video_candidates:
+            _actual = _video_candidates[0]
+            print(f"[INFO] Renaming downloaded file: {os.path.basename(_actual)} -> input.mp4")
+            os.rename(_actual, final_video_path)
+        else:
+            print(f"[WARN] Could not find downloaded video at {output_path_base}.*")
 
     # RENOMEAR LEGENDA PARA PADRÃO (input.vtt ou input.srt)
     # Se for VTT, converte para SRT para garantir compatibilidade.
