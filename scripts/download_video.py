@@ -37,33 +37,15 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
     print(i18n("Extracting video information..."))
     title = None
     
-    # ... (Keep existing title extraction logic) ...
-    # Instead of repeating it effectively, I will rely on the diff to keep it or re-write it if I have to replace the whole block.
-    # Since replace_file_content works on line ranges, I should be careful.
-    # Let's assume I'm replacing the whole function body or significant parts.
-    
-    # Tentativa 1: Com cookies
     try:
-        with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'cookiesfrombrowser': ('chrome',)}) as ydl:
+        with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
             info = ydl.extract_info(url, download=False)
             title = info.get('title')
     except Exception as e:
         try:
-            print(i18n("Warning: Failed to extract info with cookies: {}").format(e))
+            print(i18n("Error getting video info: {}").format(e))
         except UnicodeEncodeError:
-            print(i18n("Warning: Failed to extract info with cookies: [Encoding Error in Message]"))
-
-    # Tentativa 2: Sem cookies
-    if not title:
-        try:
-             with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
-                info = ydl.extract_info(url, download=False)
-                title = info.get('title')
-        except Exception as e:
-            try:
-                print(i18n("Error getting video info (without cookies): {}").format(e))
-            except UnicodeEncodeError:
-                print(i18n("Error getting video info (without cookies): [Encoding Error in Message]"))
+            print(i18n("Error getting video info: [Encoding Error in Message]"))
 
     # Fallback final
     if title:
