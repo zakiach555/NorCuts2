@@ -108,8 +108,8 @@ def main():
     parser.add_argument("--max-duration", type=int, default=90, help="Maximum segment duration (seconds)")
     parser.add_argument("--model", default="large-v3-turbo", help="Whisper model to use")
     
-    parser.add_argument("--ai-backend", choices=["manual", "gemini", "g4f", "local"], help="AI backend for viral analysis")
-    parser.add_argument("--api-key", help="Gemini API Key (required if ai-backend is gemini)")
+    parser.add_argument("--ai-backend", choices=["manual", "gemini", "openrouter", "openai", "deepseek", "zhipu", "qwen", "huggingface", "g4f", "local"], help="AI backend for viral analysis")
+    parser.add_argument("--api-key", help="API key for the selected AI backend")
     
     parser.add_argument("--chunk-size", help="Override Chunk Size")
     parser.add_argument("--ai-model-name", help="Override AI Model Name")
