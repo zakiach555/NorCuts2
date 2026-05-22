@@ -232,51 +232,48 @@ def call_gemini(prompt, api_key, model_name='gemini-2.5-flash-lite-preview-09-20
 
 def call_g4f(prompt, model_name="gpt-4o-mini"):
     if not HAS_G4F:
-        raise ImportError("A biblioteca 'g4f' não está instalada. Instale com: pip install g4f")
-    
-    max_retries = 3
-    base_wait = 5
-    
-    for attempt in range(max_retries):
-        try:
-            response = g4f.ChatCompletion.create(
-                model=model_name,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            
-            if isinstance(response, dict):
-                if 'error' in response:
-                    raise Exception(f"API Error: {response['error']}")
-                if 'choices' in response and isinstance(response['choices'], list):
-                    if len(response['choices']) > 0:
-                         content = response['choices'][0].get('message', {}).get('content', '')
-                         if content:
-                             return content
-                if not response:
-                     raise ValueError("Empty Dict response")
+        raise ImportError("g4f not installed. Run: pip install g4f")
 
-                return json.dumps(response)
+    # g4f v7+ uses Client API — ChatCompletion.create is deprecated
+    try:
+        from g4f.client import Client as G4FClient
+    except ImportError:
+        G4FClient = None
 
-            if not response:
-                print(f"[WARN] G4F retornou resposta vazia. Tentativa {attempt+1}/{max_retries}")
-                time.sleep(base_wait)
-                continue
-            
-            if isinstance(response, str):
-                return response
+    # Fallback model list — try requested model first, then reliable alternatives
+    models_to_try = list(dict.fromkeys([model_name, "gpt-4o-mini", "gpt-4o", "gpt-4"]))
 
+    for model in models_to_try:
+        for attempt in range(2):
             try:
-                return json.dumps(response, ensure_ascii=False)
-            except:
-                return str(response)
-            
-        except Exception as e:
-            print(f"[WARN] Erro na API do G4F (Tentativa {attempt+1}/{max_retries}): {e}")
-            if attempt < max_retries - 1:
-                wait_time = base_wait * (2 ** attempt)
-                time.sleep(wait_time)
-            
-    print(f"Falha crítica após {max_retries} tentativas no G4F.")
+                if G4FClient is not None:
+                    client = G4FClient()
+                    resp = client.chat.completions.create(
+                        model=model,
+                        messages=[{"role": "user", "content": prompt}],
+                    )
+                    content = resp.choices[0].message.content
+                else:
+                    # Legacy fallback for very old g4f versions
+                    content = g4f.ChatCompletion.create(
+                        model=model,
+                        messages=[{"role": "user", "content": prompt}],
+                    )
+
+                if content and isinstance(content, str) and len(content) > 5:
+                    if model != model_name:
+                        print(f"[INFO] G4F: used fallback model '{model}'")
+                    return content
+
+                print(f"[WARN] G4F '{model}' returned empty response (attempt {attempt+1})")
+                time.sleep(3)
+
+            except Exception as e:
+                print(f"[WARN] G4F '{model}' attempt {attempt+1}: {e}")
+                if attempt == 0:
+                    time.sleep(5)
+
+    print("[ERROR] G4F failed on all models. Returning empty result.")
     return "{}"
 
 def load_transcript(project_folder):
