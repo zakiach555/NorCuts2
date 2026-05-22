@@ -43,3 +43,5 @@ preview_*.html
 # Editor
 .vscode/
 *.swp
+cookies.txt
+api_config.json
