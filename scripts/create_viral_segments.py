@@ -337,14 +337,14 @@ def _call_openai_compatible(prompt, api_key, model, base_url, provider_name,
 
 # Free OpenRouter models — tried in order when the paid model returns 402
 _OPENROUTER_FREE_FALLBACKS = [
-    "google/gemini-2.0-flash-exp:free",
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
-    "qwen/qwen-2.5-7b-instruct:free",
+    "deepseek/deepseek-v4-flash:free",
+    "google/gemma-4-31b-it:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
 ]
 
 
-def call_openrouter(prompt, api_key, model="google/gemini-2.0-flash-exp:free"):
+def call_openrouter(prompt, api_key, model="deepseek/deepseek-v4-flash:free"):
     result = _call_openai_compatible(
         prompt, api_key, model,
         base_url="https://openrouter.ai/api/v1",

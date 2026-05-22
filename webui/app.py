@@ -150,11 +150,10 @@ G4F_MODELS = [
 
 OPENROUTER_MODELS = [
     # Free models (no credits needed — use these first)
-    'google/gemini-2.0-flash-exp:free',
-    'meta-llama/llama-3.1-8b-instruct:free',
-    'mistralai/mistral-7b-instruct:free',
-    'qwen/qwen-2.5-7b-instruct:free',
-    'deepseek/deepseek-r1-distill-qwen-32b:free',
+    'deepseek/deepseek-v4-flash:free',
+    'google/gemma-4-31b-it:free',
+    'google/gemma-4-26b-a4b-it:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
     # Paid models (require credits)
     'google/gemini-2.5-flash',
     'google/gemini-2.5-pro',
