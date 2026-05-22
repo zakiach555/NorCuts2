@@ -206,6 +206,29 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         print(i18n("Unexpected error: {}").format(e))
         raise
 
+    # ── Normalize video filename to input.mp4 ──────────────────────────────
+    # yt-dlp with an outtmpl that has no extension (e.g. "…/input") skips
+    # adding the extension for pre-muxed single-format downloads.  The file
+    # ends up as just "input" (no ".mp4"), but the rest of the pipeline
+    # expects "input.mp4".  Find whatever file was created and rename it.
+    if not os.path.exists(final_video_path):
+        import glob as _glob
+        _skip_exts = {'.srt', '.vtt', '.part', '.ytdl', '.json', '.temp.mp4'}
+        _candidates = (
+            _glob.glob(output_path_base + '.*') +
+            ([output_path_base] if os.path.exists(output_path_base) else [])
+        )
+        _video_candidates = [
+            f for f in _candidates
+            if not any(f.endswith(x) for x in _skip_exts)
+        ]
+        if _video_candidates:
+            _actual = _video_candidates[0]
+            print(f"[INFO] Renaming downloaded file: {os.path.basename(_actual)} -> input.mp4")
+            os.rename(_actual, final_video_path)
+        else:
+            print(f"[WARN] Could not find downloaded video at {output_path_base}.*")
+
     # RENOMEAR LEGENDA PARA PADRÃO (input.vtt ou input.srt)
     # Se for VTT, converte para SRT para garantir compatibilidade.
     try:
