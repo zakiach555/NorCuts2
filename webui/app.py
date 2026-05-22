@@ -582,11 +582,19 @@ with gr.Blocks(title=i18n("ViralCutter WebUI"), theme=gr.themes.Default(primary_
                 
                 # Update manual inputs when preset changes (exclude translate_input — presets don't change language)
                 style_inputs = manual_inputs[:-1]
-                preset_input.change(subs.apply_preset, inputs=[preset_input], outputs=style_inputs)
+                preset_input.change(subs.apply_preset, inputs=[preset_input], outputs=style_inputs, show_progress="hidden")
 
                 # Auto-update PREVIEW HTML on any change
+                # trigger_mode="always_last" drops stale queued events so rapid slider
+                # drags don't pile up — only the final value gets processed.
                 for inp in manual_inputs:
-                    inp.change(subs.generate_preview_html, inputs=manual_inputs, outputs=preview_html)
+                    inp.change(
+                        subs.generate_preview_html,
+                        inputs=manual_inputs,
+                        outputs=preview_html,
+                        show_progress="hidden",
+                        trigger_mode="always_last",
+                    )
 
                 # Render video button
                 preview_vid_btn.click(
@@ -878,10 +886,14 @@ if __name__ == "__main__":
             pass
         
         # Launch with prevent_thread_lock to allow mounting
-        app, local_url, share_url = demo.queue().launch(
-            share=True, 
+        app, local_url, share_url = demo.queue(
+            default_concurrency_limit=5,   # allow 5 parallel UI calls
+            max_size=10,                   # drop old requests beyond 10 queued
+        ).launch(
+            share=True,
             allowed_paths=allowed_dirs,
-            prevent_thread_lock=True
+            prevent_thread_lock=True,
+            max_threads=40,                # more worker threads for fast responses
         )
         
         # Mount the VIRALS directory explicitly
