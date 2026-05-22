@@ -1,0 +1,4 @@
+Running in Windows environment (using Gradio launch for convenience).
+* Running on local URL:  http://0.0.0.0:7868
+* To create a public link, set `share=True` in `launch()`.
+Mounted /virals to C:\Users\ABDENNOUR ACHOUR\Documents\ViralCutter-main\VIRALS

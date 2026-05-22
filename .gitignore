@@ -1,0 +1,45 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Models (large binary files)
+models/
+*.pt
+*.pth
+*.onnx
+*.bin
+
+# Output / working dirs
+VIRALS/
+tmp/
+*.mp4
+*.mp3
+*.aac
+*.wav
+
+# Fonts cache
+C:/vcfonts/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+debug_*.log
+app_*.log
+
+# Temp HTML previews
+preview_*.html
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Editor
+.vscode/
+*.swp

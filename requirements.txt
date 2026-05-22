@@ -1,0 +1,18 @@
+# Core dependencies
+arabic-reshaper
+python-bidi
+numpy<2.1.0
+g4f[all]
+yt-dlp
+ffmpeg-python
+whisperx
+mediapipe
+google-genai
+insightface
+gradio
+opencv-python
+psutil
+fastapi
+uvicorn
+deep-translator
+tqdm
