@@ -912,14 +912,23 @@ OUTPUT JSON ONLY:
         except Exception as e:
             print(f"[WARN] Failed to save raw response: {e}")
 
+        # Print preview directly to stdout so it's visible in Colab logs
+        if response_text and response_text not in ("{}", "None", ""):
+            print(f"[DEBUG] Response preview (first 500 chars): {response_text[:500]}")
+        else:
+            print(f"[DEBUG] Response was empty or failed: {repr(response_text)}")
+
         # Processar resposta
         try:
             data = clean_json_response(response_text)
             chunk_segments = data.get("segments", [])
             print(f"Encontrados {len(chunk_segments)} segmentos neste chunk.")
+            if chunk_segments:
+                print(f"[DEBUG] First segment sample: {chunk_segments[0]}")
             all_raw_segments.extend(chunk_segments)
-        except json.JSONDecodeError:
-            print(f"Erro: Resposta inválida.")
+        except json.JSONDecodeError as e:
+            print(f"Erro: Resposta inválida (JSONDecodeError): {e}")
+            print(f"[DEBUG] Failed JSON (first 300 chars): {response_text[:300]}")
         except Exception as e:
             print(f"Erro desconhecido ao processar chunk: {e}")
 
