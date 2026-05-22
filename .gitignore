@@ -29,6 +29,9 @@ C:/vcfonts/
 .DS_Store
 Thumbs.db
 
+# API keys — never commit
+api_config.json
+
 # Logs
 *.log
 debug_*.log
