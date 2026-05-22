@@ -66,6 +66,16 @@ def _load_api_config():
     except Exception:
         return "openrouter", ""
 
+def _get_key_for_backend(backend):
+    """Return the API key for a specific backend from api_config.json."""
+    cfg_path = os.path.join(WORKING_DIR, "api_config.json")
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        return cfg.get(backend, {}).get("api_key", "")
+    except Exception:
+        return ""
+
 _INIT_BACKEND, _INIT_API_KEY = _load_api_config()
 
 # Helpers
@@ -532,8 +542,9 @@ with gr.Blocks(title="NorCuts2", theme=gr.themes.Base(), css=css, analytics_enab
                         else:  # manual
                             new_choices, new_val, new_chunk = [], "", 70000
 
+                        new_key = _get_key_for_backend(backend)
                         return (
-                            gr.update(visible=needs_key),
+                            gr.update(visible=needs_key, value=new_key),
                             gr.update(choices=new_choices, value=new_val, visible=(backend != "manual")),
                             gr.update(visible=show_refresh),
                             gr.update(value=new_chunk),
