@@ -6,19 +6,25 @@ from i18n.i18n import I18nAuto
 i18n = I18nAuto()
 
 def sanitize_filename(name):
-    """Remove caracteres inválidos e emojis para evitar erro de encoding no Windows."""
-    # Remove caracteres reservados do sistema de arquivos
+    """Remove filesystem-unsafe characters from a filename, preserving Unicode (Arabic, etc.)."""
+    import sys, hashlib
+    # Remove characters that are illegal in filenames on any OS
     cleaned = re.sub(r'[\\/*?:"<>|]', "", name)
-    
-    # Remove emojis e caracteres não suportados pelo console Windows (CP1252)
-    # Isso mantém acentos (á, ç, é) mas remove 😱, etc.
-    try:
-        cleaned = cleaned.encode('cp1252', 'ignore').decode('cp1252')
-    except:
-        # Fallback se não tiver CP1252: remove tudo não-ascii (remove acentos)
-        cleaned = cleaned.encode('ascii', 'ignore').decode('ascii')
-        
+
+    # On Windows only: strip characters outside the console codepage to avoid
+    # display/encoding errors. On Linux/Mac keep full UTF-8 (Arabic, CJK, etc.)
+    if sys.platform == "win32":
+        try:
+            cleaned = cleaned.encode('cp1252', 'ignore').decode('cp1252')
+        except Exception:
+            cleaned = cleaned.encode('ascii', 'ignore').decode('ascii')
+
     cleaned = cleaned.strip()
+
+    # Guard against empty result or path-traversal names like ".."
+    if not cleaned or set(cleaned) <= {'.', ' '}:
+        cleaned = hashlib.md5(name.encode('utf-8')).hexdigest()[:16]
+
     return cleaned
 
 def progress_hook(d):

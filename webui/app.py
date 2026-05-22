@@ -887,6 +887,9 @@ if __name__ == "__main__":
         # Mount the VIRALS directory explicitly
         app.mount("/virals", StaticFiles(directory=VIRALS_DIR), name="virals")
         print(f"Mounted /virals to {VIRALS_DIR}")
+        # Fallback mount for files that land outside VIRALS (e.g. Arabic titles on Linux)
+        app.mount("/project_files", StaticFiles(directory=WORKING_DIR), name="project_files")
+        print(f"Mounted /project_files to {WORKING_DIR}")
         
         demo.block_thread()
     else:

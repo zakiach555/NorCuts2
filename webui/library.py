@@ -159,16 +159,23 @@ def generate_project_gallery(project_path_name, is_full_path=False):
                         # video_path needs to be under VIRALS_DIR for this to work
                         abs_virals = os.path.abspath(VIRALS_DIR)
 
-                        if os.path.normcase(abs_video).startswith(os.path.normcase(abs_virals) + os.sep):
-                            rel_path = os.path.relpath(abs_video, abs_virals)
-                            # Replace backslashes for URL
-                            url_path = rel_path.replace("\\", "/")
-                            url_path = urllib.parse.quote(url_path)
-                            
-                            # Add timestamp to force cache refresh
-                            import time
-                            timestamp = int(time.time())
-                            video_src = f"/virals/{url_path}?t={timestamp}"
+                        abs_base = os.path.abspath(BASE_DIR)
+                        in_virals = os.path.normcase(abs_video).startswith(os.path.normcase(abs_virals) + os.sep)
+                        in_base   = os.path.normcase(abs_video).startswith(os.path.normcase(abs_base)  + os.sep)
+
+                        if in_virals or in_base:
+                            if in_virals:
+                                rel_path = os.path.relpath(abs_video, abs_virals)
+                                url_path = urllib.parse.quote(rel_path.replace("\\", "/"))
+                                import time
+                                timestamp = int(time.time())
+                                video_src = f"/virals/{url_path}?t={timestamp}"
+                            else:
+                                rel_path = os.path.relpath(abs_video, abs_base)
+                                url_path = urllib.parse.quote(rel_path.replace("\\", "/"))
+                                import time
+                                timestamp = int(time.time())
+                                video_src = f"/project_files/{url_path}?t={timestamp}"
                             
                             video_tag = f"""
                             <video controls preload="metadata" playsinline style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain;">
@@ -200,7 +207,7 @@ def generate_project_gallery(project_path_name, is_full_path=False):
                             export_link = f"{export_pr}" #{export_dv}{export_fc}"
 
                         else:
-                            video_tag = f'<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #222; color: #666;"><span>⚠️</span><br>{i18n("External Video")}</div>'
+                            video_tag = f'<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #222; color: #666;"><span>⚠️</span><br>{i18n("Video not in project directory")}: {abs_video}</div>'
                 except Exception as e:
                     video_tag = f'<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #222; color: #666;"><span>⚠️</span><br>{i18n("Error: {}").format(str(e))}</div>'
 
