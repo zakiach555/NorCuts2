@@ -368,7 +368,10 @@ footer {visibility: hidden}
 
 import header
 
-with gr.Blocks(title=i18n("ViralCutter WebUI"), theme=gr.themes.Default(primary_hue="orange", neutral_hue="slate"), css=css) as demo:
+# Pre-load default preset so components start with correct values (no demo.load() round-trip needed)
+_dp = subs.SUBTITLE_PRESETS.get("Arabic Two-Line Emphasis (RTL)", {})
+
+with gr.Blocks(title="NorCuts2", theme=gr.themes.Base(), css=css, analytics_enabled=False) as demo:
     gr.Markdown(header.badges)
     gr.Markdown(header.description)
     with gr.Tabs():
@@ -519,52 +522,52 @@ with gr.Blocks(title=i18n("ViralCutter WebUI"), theme=gr.themes.Default(primary_
                 with gr.Accordion(i18n("Advanced Settings"), open=False):
                     gr.Markdown(f"### {i18n('Appearance')}")
                     with gr.Row():
-                        font_name_input = gr.Textbox(label=i18n("Font Name"), value="Montserrat-Regular")
-                        font_size_input = gr.Slider(label=i18n("Font Size (Base)"), minimum=8, maximum=80, value=12)
-                        highlight_size_input = gr.Slider(label=i18n("Highlight Size"), minimum=8, maximum=80, value=14)
-                    
+                        font_name_input = gr.Textbox(label=i18n("Font Name"), value=_dp.get("font_name", "Montserrat-Regular"))
+                        font_size_input = gr.Slider(label=i18n("Font Size (Base)"), minimum=8, maximum=80, value=_dp.get("font_size", 24))
+                        highlight_size_input = gr.Slider(label=i18n("Highlight Size"), minimum=8, maximum=80, value=_dp.get("highlight_size", 32))
+
                     with gr.Row():
-                        font_color_input = gr.ColorPicker(label=i18n("Base Color"), value="#FFFFFF")
-                        highlight_color_input = gr.ColorPicker(label=i18n("Highlight Color"), value="#feb904")
-                        outline_color_input = gr.ColorPicker(label=i18n("Outline Color"), value="#000000")
-                        shadow_color_input = gr.ColorPicker(label=i18n("Shadow Color"), value="#000000")
-                    
+                        font_color_input = gr.ColorPicker(label=i18n("Base Color"), value=_dp.get("base_color", "#FFFFFF"))
+                        highlight_color_input = gr.ColorPicker(label=i18n("Highlight Color"), value=_dp.get("highlight_color", "#feb904"))
+                        outline_color_input = gr.ColorPicker(label=i18n("Outline Color"), value=_dp.get("outline_color", "#000000"))
+                        shadow_color_input = gr.ColorPicker(label=i18n("Shadow Color"), value=_dp.get("shadow_color", "#000000"))
+
                     gr.Markdown(f"### {i18n('Styling & Effects')}")
                     with gr.Row():
-                        outline_thickness_input = gr.Slider(label=i18n("Outline Thickness"), minimum=0, maximum=10, value=1.5)
-                        shadow_size_input = gr.Slider(label=i18n("Shadow Size"), minimum=0, maximum=10, value=2)
-                        border_style_input = gr.Dropdown(choices=[(i18n("Outline"), 1), (i18n("Opaque Box"), 3)], label=i18n("Border Style"), value=1)
-                    
+                        outline_thickness_input = gr.Slider(label=i18n("Outline Thickness"), minimum=0, maximum=10, value=_dp.get("outline_thickness", 0))
+                        shadow_size_input = gr.Slider(label=i18n("Shadow Size"), minimum=0, maximum=10, value=_dp.get("shadow_size", 1))
+                        border_style_input = gr.Dropdown(choices=[(i18n("Outline"), 1), (i18n("Opaque Box"), 3)], label=i18n("Border Style"), value=_dp.get("border_style", 1))
+
                     with gr.Row():
-                        bold_input = gr.Checkbox(label=i18n("Bold"))
-                        italic_input = gr.Checkbox(label=i18n("Italic"))
-                        uppercase_input = gr.Checkbox(label=i18n("Uppercase"))
-                        remove_punc_input = gr.Checkbox(label=i18n("Remove Punctuation"), value=True)
-                        underline_input = gr.Checkbox(label=i18n("Underline"))
-                        strikeout_input = gr.Checkbox(label=i18n("Strikeout"))
-                        
+                        bold_input = gr.Checkbox(label=i18n("Bold"), value=_dp.get("bold", False))
+                        italic_input = gr.Checkbox(label=i18n("Italic"), value=_dp.get("italic", False))
+                        uppercase_input = gr.Checkbox(label=i18n("Uppercase"), value=_dp.get("uppercase", False))
+                        remove_punc_input = gr.Checkbox(label=i18n("Remove Punctuation"), value=_dp.get("remove_punctuation", False))
+                        underline_input = gr.Checkbox(label=i18n("Underline"), value=_dp.get("underline", False))
+                        strikeout_input = gr.Checkbox(label=i18n("Strikeout"), value=_dp.get("strikeout", False))
+
                     gr.Markdown(f"### {i18n('Positioning & Layout')}")
                     with gr.Row():
-                        vertical_pos_input = gr.Slider(label=i18n("V-Pos (Margin V)"), minimum=0, maximum=640, value=210)
-                        alignment_input = gr.Dropdown(choices=[(i18n("Bottom-Left"), 1), (i18n("Bottom-Center"), 2), (i18n("Bottom-Right"), 3), (i18n("Mid-Left"), 4), (i18n("Mid-Center"), 5), (i18n("Mid-Right"), 6), (i18n("Top-Left"), 7), (i18n("Top-Center"), 8), (i18n("Top-Right"), 9)], label=i18n("Alignment"), value=2)
-                        gap_limit_input = gr.Slider(label=i18n("Gap Limit"), minimum=0.0, maximum=5.0, value=0.5, step=0.1)
-                        mode_input = gr.Dropdown(choices=[(i18n("Highlight"), "highlight"), (i18n("Word by Word"), "word_by_word"), (i18n("No Highlight"), "no_highlight"), (i18n("Norz (Hormozi Style)"), "norz"), (i18n("Two-Line Emphasis (Arabic)"), "two_line_emphasis")], label=i18n("Mode"), value="highlight")
-                        words_per_block_input = gr.Slider(label=i18n("Words per Block"), minimum=1, maximum=20, value=3, step=1)
+                        vertical_pos_input = gr.Slider(label=i18n("V-Pos (Margin V)"), minimum=0, maximum=640, value=_dp.get("vertical_position", 500))
+                        alignment_input = gr.Dropdown(choices=[(i18n("Bottom-Left"), 1), (i18n("Bottom-Center"), 2), (i18n("Bottom-Right"), 3), (i18n("Mid-Left"), 4), (i18n("Mid-Center"), 5), (i18n("Mid-Right"), 6), (i18n("Top-Left"), 7), (i18n("Top-Center"), 8), (i18n("Top-Right"), 9)], label=i18n("Alignment"), value=_dp.get("alignment", 2))
+                        gap_limit_input = gr.Slider(label=i18n("Gap Limit"), minimum=0.0, maximum=5.0, value=_dp.get("gap_limit", 0.5), step=0.1)
+                        mode_input = gr.Dropdown(choices=[(i18n("Highlight"), "highlight"), (i18n("Word by Word"), "word_by_word"), (i18n("No Highlight"), "no_highlight"), (i18n("Norz (Hormozi Style)"), "norz"), (i18n("Two-Line Emphasis (Arabic)"), "two_line_emphasis")], label=i18n("Mode"), value=_dp.get("mode", "two_line_emphasis"))
+                        words_per_block_input = gr.Slider(label=i18n("Words per Block"), minimum=1, maximum=20, value=_dp.get("words_per_block", 8), step=1)
 
                     gr.Markdown(f"### {i18n('Norz / Two-Line Emphasis Template')}")
                     with gr.Row():
-                        watermark_text_input = gr.Textbox(label=i18n("Watermark text (bottom)"), value="@nouradrenalinez", placeholder="e.g. @nouradrenalinez")
-                        speaker_name_input   = gr.Textbox(label=i18n("Speaker name (top-left, optional)"), value="", placeholder="e.g. محمد عشور")
-                        speaker_title_input  = gr.Textbox(label=i18n("Speaker title (below name, optional)"), value="", placeholder="e.g. استاذ فيزياء")
+                        watermark_text_input = gr.Textbox(label=i18n("Watermark text (bottom)"), value=_dp.get("watermark_text", "@nourzdrenalinez"), placeholder="e.g. @nourzdrenalinez")
+                        speaker_name_input   = gr.Textbox(label=i18n("Speaker name (top-left, optional)"), value=_dp.get("speaker_name", ""), placeholder="e.g. محمد عشور")
+                        speaker_title_input  = gr.Textbox(label=i18n("Speaker title (below name, optional)"), value=_dp.get("speaker_title", ""), placeholder="e.g. استاذ فيزياء")
                     gr.Markdown(f"#### {i18n('Watermark Style')}")
                     with gr.Row():
-                        wm_transparency_input   = gr.Slider(label=i18n("Watermark Transparency %"), minimum=0, maximum=100, value=25, step=1, info=i18n("0 = fully visible, 100 = invisible"))
-                        wm_outline_input        = gr.Slider(label=i18n("Watermark Outline"), minimum=0, maximum=5, value=0, step=0.5)
-                        wm_shadow_input         = gr.Slider(label=i18n("Watermark Shadow"), minimum=0, maximum=8, value=1, step=0.5)
+                        wm_transparency_input   = gr.Slider(label=i18n("Watermark Transparency %"), minimum=0, maximum=100, value=_dp.get("wm_transparency", 25), step=1, info=i18n("0 = fully visible, 100 = invisible"))
+                        wm_outline_input        = gr.Slider(label=i18n("Watermark Outline"), minimum=0, maximum=5, value=_dp.get("wm_outline", 0), step=0.5)
+                        wm_shadow_input         = gr.Slider(label=i18n("Watermark Shadow"), minimum=0, maximum=8, value=_dp.get("wm_shadow", 1), step=0.5)
                     gr.Markdown(f"#### {i18n('Speaker / Title Sizes')}")
                     with gr.Row():
-                        spk_name_size_input  = gr.Number(label=i18n("Speaker Name Size (0 = auto)"), value=0, precision=0, minimum=0)
-                        spk_title_size_input = gr.Number(label=i18n("Speaker Title Size (0 = auto)"), value=0, precision=0, minimum=0)
+                        spk_name_size_input  = gr.Number(label=i18n("Speaker Name Size (0 = auto)"), value=_dp.get("spk_name_size", 24), precision=0, minimum=0)
+                        spk_title_size_input = gr.Number(label=i18n("Speaker Title Size (0 = auto)"), value=_dp.get("spk_title_size", 18), precision=0, minimum=0)
 
                 manual_inputs = [
                     font_name_input, font_size_input, font_color_input, highlight_color_input,
@@ -603,9 +606,8 @@ with gr.Blocks(title=i18n("ViralCutter WebUI"), theme=gr.themes.Default(primary_
                     outputs=preview_vid
                 )
 
-                # Initial load — apply default preset then render preview
-                demo.load(subs.apply_preset, inputs=[preset_input], outputs=style_inputs)
-                demo.load(subs.generate_preview_html, inputs=manual_inputs, outputs=preview_html)
+                # No demo.load() calls — initial values are set directly on components,
+                # so the page is fully interactive the moment the JS finishes loading.
 
              with gr.Row():
                  start_btn = gr.Button(i18n("Start Processing"), variant="primary")
