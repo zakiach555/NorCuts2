@@ -37,29 +37,14 @@ def progress_hook(d):
     elif d['status'] == 'finished':
         print(f"[download] Download concluído: {d['filename']}", flush=True)
 
-def _find_cookies_file():
-    """Return path to cookies.txt if it exists in the project root, else None."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(script_dir)
-    candidate = os.path.join(project_root, "cookies.txt")
-    return candidate if os.path.exists(candidate) else None
-
-
 def download(url, base_root="VIRALS", download_subs=True, quality="best"):
     # 1. Extrair informações do vídeo para pegar o título
     # 1. Extrair informações do vídeo para pegar o título
     print(i18n("Extracting video information..."))
     title = None
-    _info_cookies = _find_cookies_file()
-    _info_opts = {
-        'quiet': True,
-        'no_warnings': True,
-    }
-    if _info_cookies:
-        _info_opts['cookiefile'] = _info_cookies
-
+    
     try:
-        with yt_dlp.YoutubeDL(_info_opts) as ydl:
+        with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
             info = ydl.extract_info(url, download=False)
             title = info.get('title')
     except Exception as e:
@@ -124,23 +109,19 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
     selected_format = quality_map.get(quality, 'bestvideo+bestaudio/best')
     print(i18n("Configuring download quality: {} -> {}").format(quality, selected_format))
 
-    cookies_file = _find_cookies_file()
-    if cookies_file:
-        print(i18n("Using cookies file: {}").format(cookies_file))
-
     ydl_opts = {
         'format': selected_format,
         'overwrites': True,
-        'outtmpl': output_path_base,
+        'outtmpl': output_path_base, 
         'postprocessor_args': [
             '-movflags', 'faststart'
         ],
         'merge_output_format': 'mp4',
         'progress_hooks': [progress_hook],
-        # Subtitle options
+        # Opções de Legenda
         'writesubtitles': download_subs,
         'writeautomaticsub': download_subs,
-        'subtitleslangs': ['pt.*', 'en.*', 'sp.*', 'ar.*'],
+        'subtitleslangs': ['pt.*', 'en.*', 'sp.*'], # Prioritize generic PT, EN, SP
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
@@ -149,10 +130,9 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         'no_warnings': False,
         'force_ipv4': True,
     }
+    
 
-    if cookies_file:
-        ydl_opts['cookiefile'] = cookies_file
-
+    
     if download_subs:
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegSubtitlesConvertor',
@@ -163,113 +143,42 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         print(i18n("Downloading video to: {}...").format(project_folder))
     except UnicodeEncodeError:
         print(i18n("Downloading video to: {}...").format(project_folder.encode('ascii', 'replace').decode('ascii')))
-
-    _BOT_DETECTION_PHRASES = (
-        "Sign in to confirm you're not a bot",
-        "confirm you're not a bot",
-        "bot detection",
-        "Requested format is not available",
-    )
-
-    def _is_bot_error(err_str):
-        return any(p.lower() in err_str.lower() for p in _BOT_DETECTION_PHRASES)
-
-    def _try_pytubefix_fallback(video_url, dest_path):
-        """Fallback downloader using pytubefix when yt-dlp is blocked."""
-        try:
-            from pytubefix import YouTube
-            from pytubefix.cli import on_progress
-            print(i18n("[FALLBACK] Trying pytubefix..."))
-            yt = YouTube(video_url, on_progress_callback=on_progress, use_oauth=False, allow_oauth_cache=True)
-            stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-            if not stream:
-                stream = yt.streams.filter(file_extension='mp4').order_by('resolution').desc().first()
-            if not stream:
-                print(i18n("[FALLBACK] pytubefix: no MP4 stream found."))
-                return False
-            tmp_dir = os.path.dirname(dest_path)
-            tmp_name = "input_pytube_tmp.mp4"
-            stream.download(output_path=tmp_dir, filename=tmp_name)
-            tmp_path = os.path.join(tmp_dir, tmp_name)
-            if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 1024:
-                os.rename(tmp_path, dest_path)
-                print(i18n("[FALLBACK] pytubefix download succeeded: {}").format(dest_path))
-                return True
-            return False
-        except Exception as pte:
-            print(i18n("[FALLBACK] pytubefix failed: {}").format(pte))
-            return False
-
-    # Attempt 1: yt-dlp with configured player clients
-    _ytdlp_error = None
+    
+    # Tentativa 1: Com configuração original
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except yt_dlp.utils.DownloadError as e:
         error_str = str(e)
-        _ytdlp_error = e
-
         if "No address associated with hostname" in error_str or "Failed to resolve" in error_str:
             print(i18n("\n[CRITICAL ERROR] Connection Failure: Could not access YouTube."))
             print(i18n("Check your internet connection or if there is any DNS block."))
+            print(i18n("Details: {}").format(e))
             sys.exit(1)
-
-        elif _is_bot_error(error_str):
-            print(i18n("\n[BOT DETECTION] yt-dlp was blocked by YouTube."))
-            print(i18n("Attempting pytubefix fallback..."))
-            if not _try_pytubefix_fallback(url, final_video_path):
-                print(i18n("\n[FAILED] Both yt-dlp and pytubefix are blocked."))
-                print(i18n("FIX: Export cookies from your browser and upload cookies.txt."))
-                print(i18n("  In Colab: run the '🍪 YouTube Cookies' cell to upload cookies.txt"))
-                print(i18n("  Guide: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"))
-                raise
-            # pytubefix succeeded — continue to subtitle/rename steps below
-
+        
         elif download_subs and ("Unable to download video subtitles" in error_str or "429" in error_str):
             print(i18n("\nWarning: Error downloading subtitles ({}).").format(e))
             print(i18n("Retrying ONLY the video (without subtitles)..."))
+            
             ydl_opts['writesubtitles'] = False
             ydl_opts['writeautomaticsub'] = False
             ydl_opts['postprocessors'] = [p for p in ydl_opts.get('postprocessors', []) if 'Subtitle' not in p.get('key', '')]
+            
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
             except Exception as e2:
                 print(i18n("Fatal error on second attempt: {}").format(e2))
                 raise
-
         elif "is not a valid URL" in error_str:
-            print(i18n("Error: the entered link is not valid."))
-            raise
+             print(i18n("Error: the entered link is not valid."))
+             raise 
         else:
             print(i18n("Download error: {}").format(e))
             raise
     except Exception as e:
         print(i18n("Unexpected error: {}").format(e))
         raise
-
-    # ── Normalize video filename to input.mp4 ──────────────────────────────
-    # yt-dlp with an outtmpl that has no extension (e.g. "…/input") skips
-    # adding the extension for pre-muxed single-format downloads.  The file
-    # ends up as just "input" (no ".mp4"), but the rest of the pipeline
-    # expects "input.mp4".  Find whatever file was created and rename it.
-    if not os.path.exists(final_video_path):
-        import glob as _glob
-        _skip_exts = {'.srt', '.vtt', '.part', '.ytdl', '.json', '.temp.mp4'}
-        _candidates = (
-            _glob.glob(output_path_base + '.*') +
-            ([output_path_base] if os.path.exists(output_path_base) else [])
-        )
-        _video_candidates = [
-            f for f in _candidates
-            if not any(f.endswith(x) for x in _skip_exts)
-        ]
-        if _video_candidates:
-            _actual = _video_candidates[0]
-            print(f"[INFO] Renaming downloaded file: {os.path.basename(_actual)} -> input.mp4")
-            os.rename(_actual, final_video_path)
-        else:
-            print(f"[WARN] Could not find downloaded video at {output_path_base}.*")
 
     # RENOMEAR LEGENDA PARA PADRÃO (input.vtt ou input.srt)
     # Se for VTT, converte para SRT para garantir compatibilidade.
