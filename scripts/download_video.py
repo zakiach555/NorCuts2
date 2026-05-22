@@ -54,10 +54,12 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
     _info_opts = {
         'quiet': True,
         'no_warnings': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
     }
     if _info_cookies:
         _info_opts['cookiefile'] = _info_cookies
+        _info_opts['extractor_args'] = {'youtube': {'player_client': ['tv_embedded', 'ios', 'mweb']}}
+    else:
+        _info_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'web']}}
 
     try:
         with yt_dlp.YoutubeDL(_info_opts) as ydl:
@@ -149,13 +151,16 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         'quiet': False,
         'no_warnings': False,
         'force_ipv4': True,
-        # Use multiple player clients — tv_embedded/mweb bypass bot detection on most videos
-        'extractor_args': {'youtube': {'player_client': ['tv_embedded', 'mweb', 'android', 'web']}},
     }
 
-    # Attach cookies file if present (needed when YouTube requires sign-in)
+    # android client does NOT support cookies — use cookie-compatible clients when available
     if cookies_file:
+        # tv_embedded and ios work with cookies and bypass PO-token requirement
+        ydl_opts['extractor_args'] = {'youtube': {'player_client': ['tv_embedded', 'ios', 'mweb']}}
         ydl_opts['cookiefile'] = cookies_file
+    else:
+        # Without cookies: android bypasses bot detection best; tv_embedded/mweb as fallback
+        ydl_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'tv_embedded', 'mweb', 'web']}}
 
     if download_subs:
         ydl_opts['postprocessors'] = [{
